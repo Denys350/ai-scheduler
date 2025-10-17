@@ -160,7 +160,7 @@ def schedule_meeting_tool():
         )
         booking_data = res.json()
 
-        if res.status_code != 200 or booking_data.get("details", {}).get("status") != "success":
+        if res.status_code != 200 or booking_data.get("status") != "success":
             return jsonify(
                 {"error": "Failed to create Cal.com booking", "details": booking_data}
             ), 500
@@ -168,9 +168,8 @@ def schedule_meeting_tool():
         return jsonify({
             "success": True,
             "message": f"Meeting scheduled for {iso_date}",
-            "booking": booking_data["details"]["data"]
+            "booking": booking_data.get("data")
         })
-
 
     except Exception as e:
         print("❌ Exception:", str(e))
