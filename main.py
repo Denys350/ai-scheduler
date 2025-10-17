@@ -67,8 +67,8 @@ def mcp_root():
                             },
                             "timezone": {
                                 "type": "string",
-                                "description": "Timezone (default UTC)",
-                                "default": "UTC",
+                                "description": "Timezone (e.g., 'Europe/Amsterdam', 'Europe/Kyiv', 'America/New_York'). MUST match your Cal.com account timezone setting.",
+                                "default": "Europe/Amsterdam",
                             },
                         },
                         "required": ["name", "email", "time"],
@@ -78,25 +78,42 @@ def mcp_root():
         }
     )
 
+
 @app.route("/tools", methods=["GET"])
 def list_tools():
-    return jsonify({
-        "tools": [
-            {
-                "name": "schedule_meeting",
-                "description": "Schedules a call on Cal.com given a name, email, and time string.",
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string", "description": "Full name of the attendee"},
-                        "email": {"type": "string", "description": "Email address of the attendee"},
-                        "time": {"type": "string", "description": "Natural language date/time (e.g. 'next Monday at 3pm')"}
+    return jsonify(
+        {
+            "tools": [
+                {
+                    "name": "schedule_meeting",
+                    "description": "Schedules a call on Cal.com given a name, email, and time string.",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Full name of the attendee",
+                            },
+                            "email": {
+                                "type": "string",
+                                "description": "Email address of the attendee",
+                            },
+                            "time": {
+                                "type": "string",
+                                "description": "Natural language date/time (e.g. 'next Monday at 3pm')",
+                            },
+                            "timezone": {
+                                "type": "string",
+                                "description": "Timezone (e.g., 'Europe/Kyiv', 'America/New_York')",
+                            },
+                        },
+                        "required": ["name", "email", "time"],
                     },
-                    "required": ["name", "email", "time"]
                 }
-            }
-        ]
-    })
+            ]
+        }
+    )
+
 
 # 🧩 MCP Tool Endpoint
 @app.route("/tools/schedule_meeting", methods=["POST"])
@@ -111,19 +128,30 @@ def schedule_meeting_tool():
         email = data.get("email")
         time_str = data.get("time")
         duration = data.get("duration", 30)
-        user_timezone = data.get("timezone", "UTC")
+        user_timezone = data.get("timezone", "Europe/Amsterdam")
 
         if not name or not email or not time_str:
             return jsonify({"error": "Missing required fields: name, email, time"}), 400
 
-        # Parse date/time
+        # Validate timezone
+        try:
+            tz = pytz.timezone(user_timezone)
+        except pytz.exceptions.UnknownTimeZoneError:
+            return jsonify({"error": f"Invalid timezone: {user_timezone}"}), 400
+
+        # Parse date/time in the user's timezone
         try:
             parsed_date = date_parse(time_str, fuzzy=True)
-        except Exception:
-            return jsonify({"error": f"Could not parse date: {time_str}"}), 400
-
-        if parsed_date.tzinfo is None:
-            parsed_date = pytz.UTC.localize(parsed_date)
+            
+            # If no timezone info, assume it's in the user's timezone
+            if parsed_date.tzinfo is None:
+                parsed_date = tz.localize(parsed_date)
+            else:
+                # Convert to user's timezone for consistency
+                parsed_date = parsed_date.astimezone(tz)
+                
+        except Exception as e:
+            return jsonify({"error": f"Could not parse date: {time_str}", "details": str(e)}), 400
 
         # Validate slot availability
         is_avail, avail_msg = is_available_slot(parsed_date, user_timezone)
@@ -132,11 +160,12 @@ def schedule_meeting_tool():
                 {
                     "error": "Requested time is not available",
                     "reason": avail_msg,
-                    "availability": "Monday-Friday, 9:00 AM - 5:00 PM UTC",
+                    "availability": "Monday-Friday, 9:00 AM - 5:00 PM in your timezone",
                 }
             ), 400
 
-        iso_date = parsed_date.isoformat()
+        # Convert to UTC for Cal.com API
+        iso_date = parsed_date.astimezone(pytz.UTC).isoformat()
 
         # Call Cal.com API
         payload = {
@@ -160,16 +189,24 @@ def schedule_meeting_tool():
         )
         booking_data = res.json()
 
-        if res.status_code != 200 or booking_data.get("status") != "success":
+        print("***********", booking_data)
+        print("################", booking_data.get("status"))
+        print("##&&&&&&&&&&&&&&#", booking_data.get("status") == "success")
+        print(f"Response Status Code: {res.status_code}")
+        print(f"Response Status: {booking_data.get('status')}")
+
+        if res.status_code != 201 or booking_data.get("status") != "success":
             return jsonify(
                 {"error": "Failed to create Cal.com booking", "details": booking_data}
             ), 500
 
-        return jsonify({
-            "success": True,
-            "message": f"Meeting scheduled for {iso_date}",
-            "booking": booking_data.get("data")
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": f"Meeting scheduled for {iso_date}",
+                "booking": booking_data.get("data"),
+            }
+        )
 
     except Exception as e:
         print("❌ Exception:", str(e))
