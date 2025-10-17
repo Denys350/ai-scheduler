@@ -83,8 +83,8 @@ def mcp_root():
 @app.route("/tools/schedule_meeting", methods=["POST"])
 def schedule_meeting_tool():
     # Optional header security check
-    if MCP_SECRET and request.headers.get("X-MCP-SECRET") != MCP_SECRET:
-        return jsonify({"error": "Unauthorized"}), 401
+    # if MCP_SECRET and request.headers.get("X-MCP-SECRET") != MCP_SECRET:
+    #     return jsonify({"error": "Unauthorized"}), 401
 
     try:
         data = request.get_json()
