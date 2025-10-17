@@ -78,6 +78,25 @@ def mcp_root():
         }
     )
 
+@app.route("/tools", methods=["GET"])
+def list_tools():
+    return jsonify({
+        "tools": [
+            {
+                "name": "schedule_meeting",
+                "description": "Schedules a call on Cal.com given a name, email, and time string.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Full name of the attendee"},
+                        "email": {"type": "string", "description": "Email address of the attendee"},
+                        "time": {"type": "string", "description": "Natural language date/time (e.g. 'next Monday at 3pm')"}
+                    },
+                    "required": ["name", "email", "time"]
+                }
+            }
+        ]
+    })
 
 # 🧩 MCP Tool Endpoint
 @app.route("/tools/schedule_meeting", methods=["POST"])
