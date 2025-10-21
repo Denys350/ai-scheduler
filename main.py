@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import os
 import requests
 from dotenv import load_dotenv
@@ -8,6 +9,8 @@ import pytz
 # Load environment variables
 load_dotenv()
 app = Flask(__name__)
+
+CORS(app)
 
 CAL_API_KEY = os.getenv("CAL_API_KEY")
 CAL_EVENT_TYPE_ID = os.getenv("CAL_EVENT_TYPE_ID")
